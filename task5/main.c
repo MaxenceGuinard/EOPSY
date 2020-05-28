@@ -17,7 +17,7 @@
 #define M 4
 
 // Clients
-#define C 10
+#define C 3
 
 // Function declaration
 void *createClient(void *_id);
@@ -50,10 +50,17 @@ sem_t waitbarber;
 
 //_____________________________________________________________________________________________________________________________________________________________________________________________________________
 int main() 
-{
+{   
     // Initialize random function
     randomTimeIni();
-
+    
+    printf("Barber for:\n");
+    printf("    -Men  : %d\n", N1);
+    printf("    -Women: %d\n", N2);
+    printf("    -Both : %d\n\n", N3);
+    printf("Number of place  : %d\n", M);
+    printf("Client number    : %d\n\n", C);
+    
     // Thread declaration
     pthread_t barberThreadW[N1];
     pthread_t barberThreadM[N2];
@@ -271,7 +278,7 @@ void *createClient(void *_id)
 
         sem_wait(&waitbarber);
         
-        // Case where le barber was versatile
+        // Case where the barber was versatile
         if (is_barber_versatile)
         {
             sem_post(&barber_chair_B);
