@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
+#include <stdbool.h>
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -11,33 +12,58 @@ void *createBarber(void * _id);
 
 void randomTimeIni();
 char returnRandomGender();
+int returnBarberType();
 
 // Women
-#define N1 0
+#define N1 1
 // Men
-#define N2 0
+#define N2 1
 // Both
 #define N3 2
 
 // Chairs
-#define M 1
+#define M 0
 
 // Clients
 #define C 2
 
+int _N1 = N1;
+int _N2 = N2;
+int _N3 = N3;
+
+int returnBarberType()
+{
+    if (_N1 != 0)
+    {
+        _N1--;
+        return 0;
+    }
+    if (_N1 == 0 && _N2 != 0)
+    {
+        _N2--;
+        return 1;
+    }
+    if (_N1 == 0 && _N2 == 0 && _N3 != 0)
+    {
+        _N3--;
+        return 2;
+    }    
+}
+
 int barber_number = N1 + N2 + N3;
-int clientAreAllDone = 0;
+bool clientAreAllDone = false;
 int tab_barber[N1+N2+N3];
 int tab_client[C];
 
 sem_t waiting_room;
 
-sem_t barber_chair_F;
+sem_t barber_chair_W;
 sem_t barber_chair_M;
 sem_t barber_chair_B;
 
 sem_t barber_bed;
-sem_t seateBealt;
+sem_t waitbarber;
+
 // _____________________________________________________________________________________________________________________________
 int main() 
 {
@@ -61,12 +87,12 @@ int main()
     
     sem_init(&waiting_room, 0, M);
 
-    sem_init(&barber_chair_F, 0, N1);
+    sem_init(&barber_chair_W, 0, N1);
     sem_init(&barber_chair_M, 0, N2);
     sem_init(&barber_chair_B, 0, N3);
 
     sem_init(&barber_bed, 0, 0);
-    sem_init(&seateBealt, 0, 0);
+    sem_init(&waitbarber, 0, 0);
 
     // Create barber threads
     for (int i = 0; i < N1+N2+N3; i++)
@@ -81,86 +107,120 @@ int main()
         sleep(1);
     }
 
+
+    printf("sdf\n");
+    sleep(1);
+
     for (int i = 0; i < C; i++)
     {
         pthread_join(clientThread[i], NULL);
         sleep(1);
     }
+    printf("sdf2\n");
     
+    clientAreAllDone = true;
     
-
-    clientAreAllDone = 1;
-
     for (int i = 0; i < N1+N2+N3; i++)
     {
         sem_post(&barber_bed);
         pthread_join(barberThread[i], NULL);
+        sleep(1);
     }
-    
-    
-    
-
-
-
-    return 0;
 }
 
 // _____________________________________________________________________________________________________________________________
 void *createClient(void *_id)
 {
     int id = *(int *)_id;
-    char sex = returnRandomGender();
+    char gender = returnRandomGender();
+    int place_number;
 
-    printf("Client %d (%c) is going to the barber shop.\n", id, sex);
-    
-    sleep(1);
-    printf("Client %d (%c) arrive in the barber shop\n", id, sex);
+    sem_getvalue(&waiting_room, &place_number);
 
-    sem_wait(&waiting_room);
-    printf("Client %d (%c) take place in the waiting room\n", id, sex);
-
-    if (sex == 'F')
+    if (place_number == 0)
     {
-        sem_wait(&barber_chair_F);
+        printf("Client(%c) %d give up.\n", gender, id);
     }
     else
     {
-        sem_wait(&barber_chair_M);
-    }
+        printf("Client(%c) %d is going to the barber shop.\n", gender, id);
     
+        sleep(1);
+        printf("Client(%c) %d arrive in the barber shop\n", gender, id);
 
-    sem_post(&waiting_room);
+        sem_wait(&waiting_room);
+        printf("Client(%c) %d take place in the waiting room\n", gender, id);
 
-    printf("Client %d (%c) waking the barber up.\n", id, sex);
-    sem_post(&barber_bed);
+        if (gender == 'W')
+        {
+            sem_wait(&barber_chair_W);
+        }
+        if (gender == 'M')
+        {
+            sem_wait(&barber_chair_M);
+        }
+        
 
-    sem_wait(&seateBealt);
-    //sem_post(&barber_chair);
-    printf("Client %d (%c) leaving barber shop.\n", id, sex);
+        sem_post(&waiting_room);
+
+        printf("Client(%c) %d waking the barber up.\n", gender, id);
+        sem_post(&barber_bed);
+
+        sem_wait(&waitbarber);
+
+        if (gender == 'W')
+        {
+            sem_post(&barber_chair_W);
+        }
+        if (gender == 'M')
+        {
+            sem_post(&barber_chair_M);
+        }
+
+        printf("Client(%c) %d leaving barber shop.\n", gender, id);   
+    }
 }   
 
 // _____________________________________________________________________________________________________________________________
 void *createBarber(void *_id)
 {
     int id = *(int *)_id;
+    int _type = returnBarberType();
+    char type;
 
+    switch (_type)
+    {
+    case 0:
+        type = 'W';
+        break;
+    case 1:
+        type = 'M';
+        break;
+    case 2:
+        type = 'B';
+        break;
+    default:
+        break;
+    }
+    
     while (!clientAreAllDone)
     {
-        printf("The barber %d is spleeping.\n", id);
+        printf("The barber(%c) %d is spleeping.\n", type, id);
         sem_wait(&barber_bed);
 
         if (!clientAreAllDone)
         {
-            printf("The barber %d is cutting hair\n", id);
-            //waitRandomTimeBetween0And(2);
-            sleep(2);
-            printf("The barber %d has finished cutting hair.\n", id);
+            
 
-            sem_post(&seateBealt);
+            printf("The barber(%c) %d is cutting hair\n", type, id);
+            sleep(2);
+            printf("The barber(%c) %d has finished cutting hair.\n", type, id);
+
+            sem_post(&waitbarber);
         }
         else
         {
-            printf("The barber %d is done for today.\n", id);
+            printf("The barber(%c) %d is done for today.\n", type, id);
         }
     }
 }
@@ -171,7 +231,7 @@ char returnRandomGender()
     int number = rand() % 2;
     if (number == 0)
     {
-        return 'F';
+        return 'W';
     }
     else
     {
@@ -192,4 +252,3 @@ void randomTimeIni()
     int number = rand() % _number;
     sleep(number);
 }*/
-
