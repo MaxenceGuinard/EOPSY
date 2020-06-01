@@ -16,6 +16,8 @@ void help();
 void copy_mmap(char* fd_from, char* fd_to);
 void copy_read_write(char* fd_from, char* fd_to);
 
+bool is_file_existing(const char* filename);
+
 int main(int argc, char** argv) 
 {
     
@@ -29,9 +31,17 @@ int main(int argc, char** argv)
     {
         if (strcmp(argv[1], "-m") == 0 && argc == 4)
         {
-            int source, target;
             // With -m
-            copy_mmap(argv[2], argv[3]);
+            if (is_file_existing(argv[2]))
+            {
+                copy_mmap(argv[2], argv[3]);
+            }
+            else
+            {
+                printf("No such file named %s\n", argv[2]);
+                help();
+                return 0;
+            }  
         }
         else
         {
@@ -51,13 +61,22 @@ int main(int argc, char** argv)
             
             if (argc != 3)
             {
-                printf("\nInvalid number of argumentsnew\n");
+                printf("\nInvalid number of arguments\n");
                 help();
                 return 0;
             }
             
             // Without -m
-            copy_read_write(argv[1], argv[2]);
+            if(is_file_existing(argv[1]))
+            {
+                copy_read_write(argv[1], argv[2]);
+            }
+            else
+            {
+                printf("No such file named %s\n", argv[1]);
+                help();
+                return 0;
+            }
         }
     }
 }
@@ -74,22 +93,30 @@ void copy_mmap(char* fd_from, char* fd_to)
 {
     int source, target;
     char *sourcePtr, *targetPtr;
-    size_t sourceFileSize;
+    size_t sourceFileSize = 0;
 
     // Open source file
     source = open(fd_from, O_RDONLY);
-    sourcePtr = mmap(NULL, sourceFileSize, PROT_READ, MAP_PRIVATE, source, 0);
 
+    // Compute the size of the source file
     sourceFileSize = lseek(source, 0, SEEK_END);
 
-    target = open(fd_to, O_CREAT | O_WRONLY, 0666);
+    // Copy source file in memory
+    sourcePtr = mmap(NULL, sourceFileSize, PROT_READ, MAP_PRIVATE, source, 0);
 
+    // Create a file named 'argv[3]' with the rights 0666
+    target = open(fd_to, O_CREAT | O_RDWR, 0666);
+
+    // Set the byte length
     ftruncate(target, sourceFileSize);
-    
+
+    // Copy target file in memory
     targetPtr = mmap(NULL, sourceFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, target, 0);
 
+    // Replace targetPtr content by the sourcePtr content
     memcpy(targetPtr, sourcePtr, sourceFileSize);
 
+    // Delete memory allocated to sourcePtr and targetPtr
     munmap(sourcePtr, sourceFileSize);
     munmap(targetPtr, sourceFileSize);
 
@@ -97,7 +124,6 @@ void copy_mmap(char* fd_from, char* fd_to)
 
     close(source);
     close(target);
-
 }
 
 void copy_read_write(char* fd_from, char* fd_to)
@@ -107,10 +133,9 @@ void copy_read_write(char* fd_from, char* fd_to)
 
     // Open source file
     source = open(fd_from, O_RDONLY);
-            
     // Create a file named 'argv[2]' with the rights 0666 
     target = open(fd_to, O_CREAT | O_WRONLY, 0666);   
-
+    
     readfile = read(source, buffer, sizeof(buffer));
 
     write(target, buffer, readfile);
@@ -119,4 +144,18 @@ void copy_read_write(char* fd_from, char* fd_to)
 
     close(source);
     close(target);
+}
+
+bool is_file_existing(const char* filename)
+{
+    struct stat buffer;
+    int exist = stat(filename, &buffer);
+    if(exist == 0)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }  
 }
