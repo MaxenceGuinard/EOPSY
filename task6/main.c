@@ -9,14 +9,17 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#define BUFF_SIZE 8096
+
 void help();
 
-void copy_mmap(int fd_from, int fd_to);
-void copy_read_write(int fd_from,   int fd_to);
-
+void copy_mmap(char* fd_from, char* fd_to);
+void copy_read_write(char* fd_from, char* fd_to);
 
 int main(int argc, char** argv) 
 {
+    
+
     if (argc == 1 || argc > 4 || strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "-H") == 0)
     {
         help();
@@ -26,9 +29,9 @@ int main(int argc, char** argv)
     {
         if (strcmp(argv[1], "-m") == 0 && argc == 4)
         {
+            int source, target;
             // With -m
-            printf("\n-m section\n");
-            copy_mmap(1, 1);
+            copy_mmap(argv[2], argv[3]);
         }
         else
         {
@@ -54,16 +57,7 @@ int main(int argc, char** argv)
             }
             
             // Without -m
-            printf("\nnormal section\n");
-
-
-            FILE* source;
-            FILE* destination;
-
-            source = fopen(argv[1], "r");
-            //destination = open(argv[2], "w");
-
-            copy_read_write(1, 1);
+            copy_read_write(argv[1], argv[2]);
         }
     }
 }
@@ -72,21 +66,57 @@ void help()
 {
     printf("\ncopy [-m] <file_name> <new_file_name>\n");
     printf("copy [-h]\n\n\n");
-    printf("  -m dedicated to map files to memory regions and copy them\n");
+    printf("  -m use memory map\n");
     printf("  -h, --help display this help and exit\n\n");
 }
 
-void copy_mmap(int fd_from, int fd_to)
+void copy_mmap(char* fd_from, char* fd_to)
 {
+    int source, target;
+    char *sourcePtr, *targetPtr;
+    size_t sourceFileSize;
+
+    // Open source file
+    source = open(fd_from, O_RDONLY);
+    sourcePtr = mmap(NULL, sourceFileSize, PROT_READ, MAP_PRIVATE, source, 0);
+
+    sourceFileSize = lseek(source, 0, SEEK_END);
+
+    target = open(fd_to, O_CREAT | O_WRONLY, 0666);
+
+    ftruncate(target, sourceFileSize);
+    
+    targetPtr = mmap(NULL, sourceFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, target, 0);
+
+    memcpy(targetPtr, sourcePtr, sourceFileSize);
+
+    munmap(sourcePtr, sourceFileSize);
+    munmap(targetPtr, sourceFileSize);
+
+    printf("%s successfully copied in %s ... \n", fd_from, fd_to);
+
+    close(source);
+    close(target);
 
 }
 
-void copy_read_write(int fd_from,   int fd_to)
+void copy_read_write(char* fd_from, char* fd_to)
 {
-    /*FILE* source;
-    FILE* destination;
+    char buffer[BUFF_SIZE];
+    int readfile, source, target; 
 
-    source = open(argv[1], "r");
+    // Open source file
+    source = open(fd_from, O_RDONLY);
+            
+    // Create a file named 'argv[2]' with the rights 0666 
+    target = open(fd_to, O_CREAT | O_WRONLY, 0666);   
 
-    open(source, O_RDONLY);*/
+    readfile = read(source, buffer, sizeof(buffer));
+
+    write(target, buffer, readfile);
+
+    printf("%s successfully copied in %s ... \n", fd_from, fd_to);
+
+    close(source);
+    close(target);
 }
