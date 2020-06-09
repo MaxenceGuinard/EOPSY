@@ -5,116 +5,132 @@
 #include <stdbool.h>
 #include <pthread.h>
 
+// number of philosopher
 #define N 5 
 
-#define LEFT (id + N - 1) % N 
-#define RIGHT (id + 1) % N
-#define THINKING 0
-#define HUNGRY 1
-#define EATING 2
+// id of the philosopher on the left of the current philosopher 
+#define LEFT (id + N - 1) % N
 
-/*void grab_forks(int _id);
+// id of the philosopher on the right of the current philosopher 
+#define RIGHT (id + 1) % N
+
+// food units
+#define FU 10
+
+// declaration of the mutex
+pthread_mutex_t mutex;
+
+// declaration of a condition
+pthread_cond_t cond[N];
+
+// declaration for philosopher threads
+pthread_t philosopherThread[N];
+
+bool flag_line_jump = false;
+
+// array to store ohilosopher ids
+int tab_philosopher[N];
+int FOOD_UNITS = FU + 1;
+
+// array to store the philosopher state
+enum {THINKING, HUNGRY, EATING} tab_state[N];   
+
+// functions declarations
+void grab_forks(int _id);
 void put_away_forks(int _id);
-void test(int _id);*/
+void test(int _id);
 void randomTimeIni();
 void waitRandomTimeBetween0And(int _number);
 void *createPhilosopher(void *_id);
 
-int tab_forks[N];
-int tab_philosopher[N];
-int tab_state[N];     
-
-pthread_t philosopherThread[N];
-pthread_mutex_t forksMutex = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t s[N];
-      
 
 int main()
 {
+   // initialize random function
    randomTimeIni();
 
+   // initialize the mutex
+   pthread_mutex_init(&mutex, NULL);
+
+   // initialize condition thread and philosophers id
    for (int i = 0; i < N; i++)
    {
-      tab_forks[i] = i;
+      pthread_cond_init(&cond[i], NULL);
       tab_philosopher[i] = i;
-      tab_state[i] = i;
    }
 
+   // create all the philosopher threads 
    for (int i = 0; i < N; i++)
    {
       pthread_create(&philosopherThread[i], NULL, createPhilosopher, &tab_philosopher[i]);
+      printf("Philosopher[%d] is taking place...\n", i);
    }
 
+   printf("\n");
+
+   // launch all the philosopher threads
    for (int i = 0; i < N; i++)
    {
       pthread_join(philosopherThread[i], NULL); 
    }
+
+   // clean mutex
+   pthread_mutex_destroy(&mutex);
+   
+   // clean condition threads
+   for (int i = 0; i < N; i++)
+   {
+      pthread_cond_destroy(&cond[i]);
+   }
+   
+   return 0;
 }
 
 void *createPhilosopher(void *_id)
 {
    int id = *(int *)_id;
-   bool locked;
+   int units_eaten = 0;
 
-   while (1)
+   sleep(1);
+
+   while (FOOD_UNITS > 0)
    {
       printf("Philosopher[%d] state: THINKING\n", id);
-      tab_state[id] = THINKING;
-      waitRandomTimeBetween0And(10);
-      printf("Philosopher[%d] state: HUNGRY\n", id);
-      tab_state[id] = HUNGRY;
-
-      locked = false;
-      while (!locked)
-      {
-         pthread_mutex_lock(&forksMutex);
-         if (tab_forks[RIGHT] == 0 || tab_forks[LEFT] == 0)
-         {
-            pthread_mutex_unlock(&forksMutex);
-            printf("Forks are not available for philosopher %d.\nPhilosopher[%d] state: THINKING\n", id, id);
-            tab_state[id] = THINKING;
-            waitRandomTimeBetween0And(15);
-            printf("Philosopher[%d] state: HUNGRY\n", id);
-            tab_state[id] = HUNGRY;
-         }
-         else
-         {
-            // Philosopher is taking forks
-            tab_forks[RIGHT] = 1;
-            tab_forks[LEFT] = 1;
-
-            pthread_mutex_unlock(&forksMutex);
-            locked = true;
-         }         
-      }
-
-      printf("Philosopher[%d] state: EATING.\n", id);
-      tab_state[id] = EATING;
       waitRandomTimeBetween0And(5);
-      //printf("Philosopher[%d] state: THINKING.\n", id);
-      pthread_mutex_lock(&forksMutex);
 
-      // Philosopher give up both forks
-      tab_forks[RIGHT] = 0;
-      tab_forks[LEFT] = 0;
-      pthread_mutex_unlock(&forksMutex);
-      waitRandomTimeBetween0And(5);
+      pthread_mutex_lock(&mutex);
+
+         grab_forks(id);
+         FOOD_UNITS--;
+         if(FOOD_UNITS > 0)
+            units_eaten++;
+         put_away_forks(id);
+         
+      pthread_mutex_unlock(&mutex);
    }
+   
+   sleep(10);
+
+   if(!flag_line_jump)
+      printf("\n");
+   flag_line_jump = true;
+   printf("Philosopher[%d] had eaten %d food units\n", id, units_eaten);
 }
  
 
-/*void grab_forks(int _id) 
+void grab_forks(int _id) 
 {
-int id = _id;
-  down(&forksMutex);   
+   int id = _id;
+   printf("Philosopher[%d] state: HUNGRY\n", id);
+   tab_state[id] = HUNGRY;   
 
-  tab_state[id] = HUNGRY;   
+   test(id);
 
-  test(id);  
-
-  up(&forksMutex);  
-
-  down(&s[id]); 
+   while (tab_state[id] != EATING 
+         && FOOD_UNITS > 0)
+   {
+      pthread_cond_wait(&cond[id], &mutex);
+   }
 }
 
  
@@ -122,24 +138,27 @@ int id = _id;
 void put_away_forks(int _id) 
 {  
    int id = _id;
-   down(&forksMutex);   
-   tab_state[id] = THINKING;   
-   test(LEFT);   
+   tab_state[id] = THINKING;
+   test(LEFT);
    test(RIGHT);  
-   up(&forksMutex); 
 }
-
- 
 
 void test(int _id) 
 {  
    int id = _id;
-   if(tab_state[id] == HUNGRY && tab_state[LEFT] != EATING && tab_state[RIGHT] != EATING)  
+
+   if(tab_state[id] == HUNGRY 
+   && tab_state[LEFT] != EATING 
+   && tab_state[RIGHT] != EATING
+   && FOOD_UNITS > 0)
    {
-      tab_state[id] = EATING;   
-      up(&s[id]);
-    }
- }*/
+      printf("Philosopher[%d] state: EATING\n", id);
+      tab_state[id] = EATING;
+      printf("%d units of food left...\n", FOOD_UNITS);
+      waitRandomTimeBetween0And(3);
+      pthread_cond_signal(&cond[id]);
+   }  
+ }
 
 void randomTimeIni()
 {
