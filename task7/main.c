@@ -98,6 +98,7 @@ void *createPhilosopher(void *_id)
       printf("Philosopher[%d] state: THINKING\n", id);
       waitRandomTimeBetween0And(5);
 
+      // lock the mutex for the current philosopher
       pthread_mutex_lock(&mutex);
 
          grab_forks(id);
@@ -105,15 +106,18 @@ void *createPhilosopher(void *_id)
          if(FOOD_UNITS > 0)
             units_eaten++;
          put_away_forks(id);
-         
+      
+      // unlock the mutex for the current philosopher
       pthread_mutex_unlock(&mutex);
    }
    
    sleep(10);
-
+   
+   // if loop just to create a line jump before the recap is displayed
    if(!flag_line_jump)
       printf("\n");
-   flag_line_jump = true;
+      flag_line_jump = true;
+   
    printf("Philosopher[%d] had eaten %d food units\n", id, units_eaten);
 }
  
@@ -125,12 +129,6 @@ void grab_forks(int _id)
    tab_state[id] = HUNGRY;   
 
    test(id);
-
-   while (tab_state[id] != EATING 
-         && FOOD_UNITS > 0)
-   {
-      pthread_cond_wait(&cond[id], &mutex);
-   }
 }
 
  
@@ -156,7 +154,6 @@ void test(int _id)
       tab_state[id] = EATING;
       printf("%d units of food left...\n", FOOD_UNITS);
       waitRandomTimeBetween0And(3);
-      pthread_cond_signal(&cond[id]);
    }  
  }
 
